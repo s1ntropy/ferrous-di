@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Pre-release Tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+
+    - name: Run clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Run tests
+      run: cargo test --all-features --verbose
+
+    - name: Run benchmarks
+      run: cargo bench --no-run --features performance
+
+  publish:
+    name: Publish to crates.io
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Login to crates.io
+      run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
+
+    - name: Publish to crates.io
+      run: cargo publish
+
+  create-release:
+    name: Create GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get tag name
+      id: tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get changes since last tag
+        PREV_TAG=$(git tag --sort=-version:refname | head -2 | tail -1)
+        if [ -z "$PREV_TAG" ]; then
+          PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+        fi
+        
+        echo "Changes since $PREV_TAG:" > CHANGELOG_TEMP.md
+        echo "" >> CHANGELOG_TEMP.md
+        git log --oneline --no-merges $PREV_TAG..HEAD >> CHANGELOG_TEMP.md
+        
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        cat CHANGELOG_TEMP.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.tag.outputs.tag }}
+        release_name: Release ${{ steps.tag.outputs.tag }}
+        body: |
+          ## Ferrous DI ${{ steps.tag.outputs.tag }}
+
+          ${{ steps.changelog.outputs.changelog }}
+
+          ### Installation
+          ```toml
+          [dependencies]
+          ferrous-di = "${{ steps.tag.outputs.tag }}"
+          ```
+
+          ### Documentation
+          - [API Documentation](https://docs.rs/ferrous-di/${{ steps.tag.outputs.tag }})
+          - [README](https://github.com/${{ github.repository }}/blob/${{ steps.tag.outputs.tag }}/README.md)
+
+          ### Performance
+          - Singleton resolution: ~78ns baseline
+          - Thread-safe concurrent access
+          - Comprehensive test coverage
+
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+        draft: false
+        prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}

@@ -1,0 +1,115 @@
+# EditorConfig configuration for Ferrous DI
+# This file helps maintain consistent coding styles across different editors
+# See https://editorconfig.org/ for more information
+
+# Top-most EditorConfig file
+root = true
+
+# All files default settings
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Rust source files
+[*.rs]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+# TOML files (Cargo.toml, config files)
+[*.toml]
+indent_style = space
+indent_size = 2
+
+# YAML files (GitHub Actions, configs)
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# JSON files
+[*.json]
+indent_style = space
+indent_size = 2
+
+# Markdown files
+[*.{md,markdown}]
+indent_style = space
+indent_size = 2
+max_line_length = 100
+trim_trailing_whitespace = false  # Trailing spaces can be significant in Markdown
+
+# Shell scripts
+[*.{sh,bash}]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+
+# Batch files (Windows)
+[*.{cmd,bat}]
+end_of_line = crlf
+indent_style = space
+indent_size = 2
+
+# Makefile
+[{Makefile,makefile,*.mk}]
+indent_style = tab
+tab_width = 4
+
+# Configuration files
+[*.{ini,cfg}]
+indent_style = space
+indent_size = 2
+
+# License files
+[LICENSE*]
+indent_style = space
+indent_size = 2
+max_line_length = 80
+
+# Ignore generated files and binaries
+[{target/**,*.lock,*.bin,*.exe}]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+
+# Documentation files
+[docs/**]
+indent_style = space
+indent_size = 2
+
+# Example files should follow Rust conventions
+[examples/**/*.rs]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+# Test files
+[{tests/**/*.rs,**/test*.rs,**/*test.rs}]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+# Benchmark files  
+[{benches/**/*.rs,**/bench*.rs,**/*bench.rs}]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+# Git files
+[.gitignore]
+indent_style = space
+indent_size = 2
+
+[.gitmodules]
+indent_style = tab
+tab_width = 4
+
+[.gitattributes]
+indent_style = space
+indent_size = 2

@@ -1,0 +1,181 @@
+# cargo-deny configuration for Ferrous DI
+# This file configures dependency auditing, license checking, and security scanning
+# Run with: cargo deny check
+
+[graph]
+# Dependency graph targets to check
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "x86_64-unknown-linux-musl" },
+    { triple = "x86_64-pc-windows-msvc" },
+    { triple = "x86_64-apple-darwin" },
+    { triple = "aarch64-apple-darwin" },
+]
+
+# Check all workspace members
+all-features = true
+no-default-features = false
+
+[advisories]
+# Security vulnerability database
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+
+# Vulnerability handling
+vulnerability = "deny"      # Deny known vulnerabilities
+unmaintained = "warn"       # Warn about unmaintained crates
+unsound = "warn"           # Warn about unsound crates
+yanked = "warn"            # Warn about yanked crates
+notice = "warn"            # Warn about security notices
+
+# Ignore specific advisories if needed (with justification)
+ignore = [
+    # Example: "RUSTSEC-2021-0073",  # Reason: Only affects unused feature
+]
+
+[licenses]
+# License policy configuration
+confidence-threshold = 0.8
+
+# Allowed licenses for dependencies
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause", 
+    "ISC",
+    "Unicode-DFS-2016",
+    "CC0-1.0",                      # Public domain
+    "0BSD",                         # BSD Zero Clause (public domain)
+    "Unlicense",                    # Public domain
+]
+
+# Denied licenses - copyleft and problematic licenses
+deny = [
+    "GPL-2.0",
+    "GPL-3.0", 
+    "AGPL-3.0",
+    "LGPL-2.1",
+    "LGPL-3.0",
+    "MPL-2.0",                      # Mozilla Public License (copyleft)
+    "CDDL-1.0",                     # Common Development and Distribution License
+    "EPL-1.0",                      # Eclipse Public License
+    "EUPL-1.2",                     # European Union Public License
+]
+
+# Copyleft licenses that require special handling
+copyleft = "deny"
+
+# Allow OSI approved and FSF libre licenses
+allow-osi-fsf-libre = "neither"
+
+# License clarity requirements
+default = "deny"
+private = { ignore = true }
+
+# Per-crate license exceptions (if needed)
+exceptions = [
+    # Example: { allow = ["LGPL-2.1"], name = "some-crate" },
+]
+
+# Confidence threshold for license detection
+[[licenses.clarity]]
+name = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 }
+]
+
+[bans]
+# Multiple versions of the same crate
+multiple-versions = "warn"        # Warn about version conflicts
+wildcards = "allow"              # Allow wildcard dependencies in dev-dependencies
+highlight = "all"                # Highlight all instances of multiple versions
+
+# Denied crates - crates that should not be used
+deny = [
+    # Example problematic crates
+    { name = "openssl", reason = "Use rustls for better security and fewer dependencies" },
+    { name = "native-tls", reason = "Use rustls for consistent cross-platform behavior" },
+]
+
+# Allowed duplicate crates (when necessary)
+allow = [
+    # Example: Multiple versions during transition periods
+    # { name = "some-crate", version = "0.1" },
+    # { name = "some-crate", version = "0.2" },
+]
+
+# Skip dependency trees that are known to have issues
+skip = [
+    # Skip build dependencies that don't affect runtime
+    { name = "windows-sys", depth = 20 },
+]
+
+# Skipped crates during dependency tree traversal
+skip-tree = [
+    # Example: Skip problematic transitive dependencies
+    # { name = "problematic-crate", depth = 5 },
+]
+
+# Build target specific configuration
+[bans.build]
+# Allow larger dependency trees for build scripts
+executables = "allow"
+include-dependencies = false
+
+[sources]
+# Source code origins
+unknown-registry = "warn"        # Warn about unknown registries
+unknown-git = "warn"            # Warn about unknown git sources
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+# Allowed git sources
+allow-git = [
+    # Example: "https://github.com/rust-lang/cargo",
+]
+
+# Private registries (if using corporate registries)
+# [sources.allow-org]
+# github = ["my-org"]
+# gitlab = ["my-group"] 
+
+# Development-specific configuration
+[bans.dev-dependencies]
+# More lenient rules for dev dependencies
+multiple-versions = "allow"
+skip = true
+
+# Specific configuration for this project
+[project]
+# Project-specific rules can be added here
+name = "ferrous-di"
+
+# Additional configuration for CI environments
+[ci]
+# Stricter rules in CI
+fail-on-warn = true
+
+# Feature-specific configuration
+[features]
+# Check optional features
+performance = { advisories = "warn", licenses = "deny", bans = "warn" }
+
+# Documentation for common issues and resolutions
+# 
+# Common commands:
+# - cargo deny check                    # Check everything
+# - cargo deny check licenses          # Check only licenses  
+# - cargo deny check bans              # Check only banned crates
+# - cargo deny check advisories        # Check only security advisories
+# - cargo deny check sources           # Check only source origins
+#
+# To update the advisory database:
+# - cargo deny fetch
+#
+# To generate a license report:
+# - cargo deny list
+#
+# To check specific features:
+# - cargo deny check --features performance

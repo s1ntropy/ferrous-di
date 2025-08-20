@@ -1,0 +1,43 @@
+# Mutation testing configuration for ferrous-di
+# https://mutants.rs/config.html
+
+[mutants]
+# Test command to run for each mutation
+test_command = "cargo test"
+
+# Time limit for each test run
+timeout = 300
+
+# Additional flags for compilation  
+build_flags = ["--all-targets"]
+
+# Exclude certain patterns from mutation
+exclude_globs = [
+    "tests/**",       # Don't mutate test files
+    "benches/**",     # Don't mutate benchmark files  
+    "examples/**",    # Don't mutate example files
+]
+
+# Focus mutation testing on core library code
+focus_globs = [
+    "src/**",
+]
+
+# Skip certain function patterns that are unlikely to benefit from mutation
+skip_functions = [
+    "fmt",            # Display/Debug implementations
+    "clone",          # Clone implementations
+    "default",        # Default implementations
+    "eq",            # Equality implementations
+    "hash",          # Hash implementations
+]
+
+# Test more thoroughly with additional mutation operators
+# mutants_coverage = true
+
+# Parallel test execution for faster results
+jobs = 8
+
+# Generate a detailed report
+output_format = "json"
+output_path = "mutants-report.json"

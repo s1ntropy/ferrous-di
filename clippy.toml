@@ -1,0 +1,111 @@
+# Clippy configuration for Ferrous DI
+# This configuration ensures high code quality and consistent linting standards
+
+# Avoid breaking exported API
+avoid-breaking-exported-api = true
+
+# Minimum Supported Rust Version - clippy will warn about features not available in MSRV
+msrv = "1.70.0"
+
+# Cognitive complexity threshold - DI systems can be complex but should stay manageable  
+cognitive-complexity-threshold = 30
+
+# Type complexity threshold - prevent overly complex generic types
+type-complexity-threshold = 250
+
+# Too many arguments threshold - service factories might need several dependencies
+too-many-arguments-threshold = 8
+
+# Too many lines threshold - keep functions focused
+too-many-lines-threshold = 100
+
+# Single char binding names threshold - short names are okay in closures
+single-char-binding-names-threshold = 4
+
+# Trivial copy pass by reference threshold - Arc<T> clones are cheap
+trivial-copy-pass-by-ref-threshold = 256
+
+# Doc markdown configuration
+doc-valid-idents = [
+    # Rust/Cargo specific
+    "crates.io", "rustc", "rustup", "Rustacean", "Rustaceans",
+    # DI and architecture terms  
+    "IoC", "DI", "SOLID", "RAII", "LIFO", "APIs", "URLs",
+    # Performance terms
+    "TLS", "MSRV", "SIMD", "CPU", "RAM",
+    # Project specific
+    "ServiceCollection", "ServiceProvider", "DiResult", "DiError",
+    "Arc", "dyn", "impl", "async", "await",
+]
+
+# Arithmetic side effects - allow for performance-critical code
+arithmetic-side-effects-allowed = [
+    # Allow arithmetic in benchmarks and tests
+    "*::bench::*",
+    "*::test*", 
+    "*::tests::*",
+]
+
+# Allowed scripts for string literals - useful for international error messages
+allowed-scripts = ["Latin", "Cyrillic", "Arabic", "Devanagari", "Hiragana", "Katakana"]
+
+# Enforce documentation for public items
+missing-docs-in-private-items = false  # Private items don't need docs
+missing-docs-in-crate-items = true     # Public crate items must have docs
+
+# Disallowed methods - methods that should be avoided in this project
+disallowed-methods = [
+    # Prefer DiResult<T> over panicking
+    { path = "std::option::Option::unwrap", reason = "Use proper error handling with DiResult" },
+    { path = "std::result::Result::unwrap", reason = "Use proper error handling or unwrap_or_else" },
+    # Prefer Arc over Rc in multi-threaded DI container
+    { path = "std::rc::Rc::new", reason = "Use Arc<T> for thread-safety" },
+    { path = "std::rc::Weak::new", reason = "Use sync::Weak for thread-safety" },
+    # Avoid println! in library code
+    { path = "std::println", reason = "Use proper logging or return errors instead" },
+    { path = "std::print", reason = "Use proper logging or return errors instead" },
+]
+
+# Disallowed types - types that should be avoided
+disallowed-types = [
+    # Prefer HashMap with better hasher
+    { path = "std::collections::HashMap", reason = "Use HashMap with ahash for better performance" },
+    # Prefer parking_lot for performance
+    { path = "std::sync::Mutex", reason = "Consider using parking_lot::Mutex for better performance" },
+    { path = "std::sync::RwLock", reason = "Consider using parking_lot::RwLock for better performance" },
+]
+
+# Allowed prefixes for non-standard names
+allowed-prefixes = ["to", "into", "from", "try"]
+
+# Standard library collections that are allowed (overrides disallowed-types for tests)
+standard-macro-braces = [
+    { name = "vec", brace = "[" },
+    { name = "arr", brace = "[" },
+]
+
+# Upper case acronyms threshold 
+upper-case-acronyms-aggressive = false
+
+# Enum variant names threshold - DI systems have many error variants
+enum-variant-name-threshold = 3
+
+# Struct excessive bool fields
+struct-excessive-bools-threshold = 3
+
+# Large types passed by value threshold - Arc<T> should be cloned, not moved
+large-types-passed-by-value-threshold = 128
+
+# Verbose bit mask threshold
+verbose-bit-mask-threshold = 1
+
+# Box large collections threshold  
+# DI containers might have large registries
+large-stack-arrays-threshold = 512
+
+# Collection capacity increase
+# Allow aggressive capacity increases for performance
+collection-capacity-increase-threshold = 4
+
+# Future not Send threshold
+future-size-threshold = 16384

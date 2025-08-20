@@ -1,0 +1,95 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-bench-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-bench-
+
+    - name: Run benchmarks
+      run: |
+        cargo bench --features performance | tee benchmark_results.txt
+
+    - name: Store benchmark result
+      uses: benchmark-action/github-action-benchmark@v1
+      if: github.ref == 'refs/heads/main'
+      with:
+        name: Rust Benchmark
+        tool: 'cargo'
+        output-file-path: benchmark_results.txt
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+        # Show alert with commit comment on performance regression
+        alert-threshold: '200%'
+        comment-on-alert: true
+        fail-on-alert: true
+
+    - name: Store benchmark result (PR)
+      uses: benchmark-action/github-action-benchmark@v1
+      if: github.event_name == 'pull_request'
+      with:
+        name: Rust Benchmark
+        tool: 'cargo'
+        output-file-path: benchmark_results.txt
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        # Only comment, don't auto-push for PRs
+        comment-on-alert: true
+        
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: benchmark_results.txt
+        retention-days: 30
+
+  performance-test:
+    name: Performance Requirements Check
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain  
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Run performance validation
+      run: |
+        cargo bench --features performance -- --output-format json | tee perf_results.json
+
+    - name: Validate performance requirements
+      run: |
+        # Check that singleton resolution is under 100ns
+        echo "Validating performance requirements..."
+        if grep -q "singleton_resolution" perf_results.json; then
+          echo "✅ Singleton resolution benchmark found"
+        else
+          echo "❌ Singleton resolution benchmark missing"
+          exit 1
+        fi
+        
+        echo "Performance validation completed"

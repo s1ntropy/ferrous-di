@@ -1,0 +1,56 @@
+[package]
+name = "ferrous-di"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jonathan Hughey"]
+description = "Type-safe, performant dependency injection for Rust, inspired by Microsoft.Extensions.DependencyInjection"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/s1ntropy/ferrous"
+keywords = ["dependency-injection", "di", "ioc", "inversion-of-control", "service-locator"]
+categories = ["rust-patterns", "config"]
+
+[dependencies]
+async-trait = "0.1"
+tokio = { version = "1.0", features = ["sync", "rt", "macros"], optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+serde_yaml = { version = "0.9", optional = true }
+chrono = { version = "0.4", features = ["serde"], optional = true }
+parking_lot = { version = "0.12", optional = true }
+ahash = { version = "0.8", optional = true }
+smallvec = { version = "1.0", optional = true }
+once_cell = { version = "1.0", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+crossbeam-utils = "0.8"
+proptest = "1.4"
+serial_test = "3.1"
+
+[features]
+default = []
+diagnostics = []  # For debug dumps and enhanced error messages
+parking-lot = ["dep:parking_lot"]
+ahash = ["dep:ahash"] 
+smallvec = ["dep:smallvec"]
+once-cell = ["dep:once_cell"]
+async = ["tokio"]  # Async/await support
+web = ["async"]  # Web framework integration support
+config = ["serde", "serde_json"]  # Configuration management
+graph-export = ["serde", "serde_json", "serde_yaml", "chrono"]  # Graph export functionality
+performance = ["parking-lot", "ahash", "smallvec", "once-cell"]  # All perf features
+
+[[example]]
+name = "web_server_scope"
+path = "examples/web_server_scope.rs"
+
+[[bench]]
+name = "di"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = false

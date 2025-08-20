@@ -1,0 +1,23 @@
+# Simple mutation testing configuration for ferrous-di
+
+# Focus on core library files only
+examine_globs = [
+    "src/error.rs",
+    "src/key.rs", 
+    "src/lifetime.rs",
+    "src/descriptors.rs",
+]
+
+# Skip certain function patterns 
+skip_calls_defaults = false
+skip_calls = [
+    "fmt",
+    "clone", 
+    "default",
+    "eq",
+    "hash",
+]
+
+# Timeout configuration
+timeout_multiplier = 3
+minimum_test_timeout = 120
