@@ -6,6 +6,7 @@
 //! - Integration with the service collection
 //! - Runtime context detection and management
 //! - Smart runtime handling (avoids blocking within async contexts)
+//! - Scope-local value resolution with proper error handling
 
 use ferrous_di::*;
 use std::sync::Arc;

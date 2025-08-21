@@ -465,13 +465,13 @@ impl Default for WorkflowContext {
 ///
 /// # Examples
 ///
-/// ```
-/// use ferrous_di::{ServiceCollection, ScopeLocal, WorkflowContext, scope_local, Resolver};
+/// ```rust,no_run
+/// use ferrous_di::{ServiceCollection, ScopeLocal, WorkflowContext, scope_local, ScopedResolver, Resolver};
 /// use std::sync::Arc;
 ///
 /// struct MyService;
 /// impl MyService {
-///     fn process(&self, resolver: &dyn crate::traits::Resolver) -> String {
+///     fn process(&self, resolver: &ScopedResolver) -> String {
 ///         // Without macro:
 ///         // let ctx = resolver.get_required::<ScopeLocal<WorkflowContext>>();
 ///         
@@ -495,7 +495,8 @@ impl Default for WorkflowContext {
 #[macro_export]
 macro_rules! scope_local {
     ($resolver:expr, $type:ty) => {
-        $resolver.get_required::<$crate::ScopeLocal<$type>>()
+        $resolver.get::<$crate::ScopeLocal<$type>>()
+            .unwrap_or_else(|e| panic!("Failed to resolve scope local {}: {:?}", std::any::type_name::<$crate::ScopeLocal<$type>>(), e))
     };
 }
 
