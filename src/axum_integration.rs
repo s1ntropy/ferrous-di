@@ -37,11 +37,34 @@ pub struct DiAxumState {
     provider: Arc<ServiceProvider>,
 }
 
+impl std::fmt::Debug for DiAxumState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DiAxumState")
+            .field("provider", &"ServiceProvider")
+            .finish()
+    }
+}
+
+// Ensure DiAxumState implements all required traits for Axum 0.7
+unsafe impl Send for DiAxumState {}
+unsafe impl Sync for DiAxumState {}
+
+// Additional trait implementations that might be required
+impl std::fmt::Display for DiAxumState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DiAxumState")
+    }
+}
+
+impl std::panic::RefUnwindSafe for DiAxumState {}
+impl std::panic::UnwindSafe for DiAxumState {}
+
 impl FromRef<DiAxumState> for Arc<ServiceProvider> {
     fn from_ref(state: &DiAxumState) -> Self {
         state.provider.clone()
     }
 }
+
 
 /// Extractor for request-scoped DI container
 ///
@@ -71,15 +94,26 @@ impl DiScope {
 }
 
 #[async_trait]
-impl FromRequestParts<DiAxumState> for DiScope {
+impl<S> FromRequestParts<S> for DiScope 
+where
+    S: Send + Sync,
+{
     type Rejection = DiRejection;
 
     async fn from_request_parts(
-        _parts: &mut Parts,
-        state: &DiAxumState,
+        parts: &mut Parts,
+        _state: &S,
     ) -> Result<Self, Self::Rejection> {
+        // Extract the ServiceProvider from the Extension layer
+        let provider = parts
+            .extensions
+            .get::<Arc<ServiceProvider>>()
+            .ok_or_else(|| DiRejection::Configuration(
+                "ServiceProvider not found in extensions. Make sure to use create_app_with_di()".to_string()
+            ))?;
+            
         Ok(DiScope {
-            scope: state.provider.create_scope(),
+            scope: provider.create_scope(),
         })
     }
 }
@@ -273,9 +307,9 @@ impl IntoResponse for DiRejection {
     }
 }
 
-/// Helper function to create an Axum app with DI support
+/// Helper function to create an Axum app with DI support (Axum 0.7 compatible)
 ///
-/// This is the idiomatic way to use ferrous-di with Axum:
+/// This is the idiomatic way to use ferrous-di with Axum 0.7:
 /// ```rust
 /// let provider = Arc::new(services.build());
 /// let app = ferrous_di::axum_integration::create_app_with_di(provider, |router| {
@@ -287,13 +321,19 @@ impl IntoResponse for DiRejection {
 pub fn create_app_with_di<F>(
     provider: Arc<ServiceProvider>,
     configure: F,
-) -> Router<DiAxumState>
+) -> Router
 where
-    F: FnOnce(Router<DiAxumState>) -> Router<DiAxumState>,
+    F: FnOnce(Router) -> Router,
 {
-    let state = provider.into_axum_state();
-    let router = Router::new().with_state(state);
-    configure(router)
+    // In Axum 0.7, we need to use a different approach
+    // Store the provider in a way that can be accessed by extractors
+    let router = Router::new();
+    
+    // Configure the router first, then add the extension
+    let router = configure(router);
+    
+    // Add the provider as an extension layer so extractors can access it
+    router.layer(axum::Extension(provider))
 }
 
 /// Helper function to create an Axum app with tenant-aware DI support

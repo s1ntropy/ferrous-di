@@ -16,15 +16,17 @@ use ferrous_di::{
     ServiceCollection, Resolver,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 
 // Domain models
 #[derive(Clone, Serialize, Deserialize)]
 struct Product {
+    #[serde(default)]
     id: u32,
     name: String,
     price: f64,
+    #[serde(default)]
     tenant_id: String,
 }
 
@@ -50,36 +52,62 @@ trait ProductRepository: Send + Sync {
     fn create(&self, product: Product) -> Product;
 }
 
-// Mock implementation of ProductRepository
+// Mock implementation of ProductRepository with state
 struct MockProductRepository {
     tenant_id: String,
+    products: Arc<Mutex<Vec<Product>>>,
+}
+
+impl MockProductRepository {
+    fn new(tenant_id: String) -> Self {
+        let initial_products = vec![
+            Product {
+                id: 1,
+                name: format!("Product A ({})", tenant_id),
+                price: 99.99,
+                tenant_id: tenant_id.clone(),
+            },
+            Product {
+                id: 2,
+                name: format!("Product B ({})", tenant_id),
+                price: 149.99,
+                tenant_id: tenant_id.clone(),
+            },
+        ];
+        
+        Self {
+            tenant_id,
+            products: Arc::new(Mutex::new(initial_products)),
+        }
+    }
 }
 
 impl ProductRepository for MockProductRepository {
     fn get_all(&self) -> Vec<Product> {
-        // In real app, this would query tenant-specific database
-        vec![
-            Product {
-                id: 1,
-                name: format!("Product A ({})", self.tenant_id),
-                price: 99.99,
-                tenant_id: self.tenant_id.clone(),
-            },
-            Product {
-                id: 2,
-                name: format!("Product B ({})", self.tenant_id),
-                price: 149.99,
-                tenant_id: self.tenant_id.clone(),
-            },
-        ]
+        self.products.lock().unwrap().clone()
     }
     
     fn get_by_id(&self, id: u32) -> Option<Product> {
-        self.get_all().into_iter().find(|p| p.id == id)
+        self.products.lock().unwrap().iter().find(|p| p.id == id).cloned()
     }
     
     fn create(&self, mut product: Product) -> Product {
-        product.tenant_id = self.tenant_id.clone();
+        let mut products = self.products.lock().unwrap();
+        
+        // Auto-assign tenant_id if not provided
+        if product.tenant_id.is_empty() {
+            product.tenant_id = self.tenant_id.clone();
+        }
+        
+        // Auto-assign ID if not provided
+        if product.id == 0 {
+            let max_id = products.iter().map(|p| p.id).max().unwrap_or(0);
+            product.id = max_id + 1;
+        }
+        
+        // Add to our in-memory store
+        products.push(product.clone());
+        
         product
     }
 }
@@ -178,16 +206,12 @@ fn configure_services() -> ServiceCollection {
         }
     });
     
-    services.add_scoped_factory::<Arc<dyn ProductRepository>, _>(|resolver| {
-        let config = resolver.get_required::<TenantConfig>();
-        Arc::new(MockProductRepository {
-            tenant_id: config.tenant_id.clone(),
-        }) as Arc<dyn ProductRepository>
-    });
+    // Register the trait implementation as a singleton to maintain state across requests
+    services.add_singleton_trait(Arc::new(MockProductRepository::new("default".to_string())) as Arc<dyn ProductRepository>);
     
     services.add_scoped_factory::<ProductService, _>(|resolver| {
-        let repository = resolver.get_required::<Arc<dyn ProductRepository>>();
-        let config = resolver.get_required::<Arc<TenantConfig>>();
+        let repository = resolver.get_required_trait::<dyn ProductRepository>();
+        let config = resolver.get_required::<TenantConfig>();
         ProductService::new(repository, config)
     });
     
@@ -225,7 +249,11 @@ async fn main() {
     println!("  curl http://127.0.0.1:3000/products/1");
     println!("  curl -X POST http://127.0.0.1:3000/products \\");
     println!("    -H 'Content-Type: application/json' \\");
-    println!("    -d '{{\"id\": 3, \"name\": \"Product C\", \"price\": 199.99}}'");
+    println!("    -d '{{\"id\": 0, \"name\": \"Product C\", \"price\": 199.99, \"tenant_id\": \"\"}}'");
+    println!("  # Note: id and tenant_id are auto-assigned if not provided");
+    
+    // Now using the corrected Axum 0.7 Extension-based DI pattern
+    println!("✅ Using Axum 0.7 Extension-based DI with into_make_service()");
     
     axum::serve(listener, app.into_make_service())
         .await
