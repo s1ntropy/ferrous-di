@@ -262,6 +262,7 @@ impl Scope {
                         }
                         Lifetime::Scoped => {
                             // Use slot-based scoped resolution for multi-bindings
+                            #[allow(unused_variables)]
                             if let Some(slot) = reg.scoped_slot {
                                 #[cfg(feature = "once-cell")]
                                 {
@@ -279,11 +280,26 @@ impl Scope {
                                 }
                                 #[cfg(not(feature = "once-cell"))]
                                 {
-                                    // Fallback for non-once_cell builds
-                                    #[allow(unused_variables)]
-                                    let _slot_unused = slot; // Slot-based optimization not available without once-cell
-                                    let ctx = ResolverContext::new(self);
-                                    (reg.ctor)(&ctx)?
+                                    // Use HashMap caching for scoped multi-bindings when once-cell is not available
+                                    let multi_key = Key::MultiTrait(trait_name, i);
+                                    
+                                    // Check if already cached
+                                    {
+                                        let guard = self.scoped.lock().unwrap();
+                                        if let Some(cached) = guard.get(&multi_key) {
+                                            cached.clone()
+                                        } else {
+                                            drop(guard); // Release lock before creating
+                                            
+                                            // Create and cache the value
+                                            let ctx = ResolverContext::new(self);
+                                            let value = (reg.ctor)(&ctx)?;
+                                            
+                                            let mut guard = self.scoped.lock().unwrap();
+                                            guard.insert(multi_key, value.clone());
+                                            value
+                                        }
+                                    }
                                 }
                             } else {
                                 // No slot assigned - fallback to transient behavior
