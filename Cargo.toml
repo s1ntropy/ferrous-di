@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Jonathan Hughey"]
 description = "Type-safe, performant dependency injection for Rust, inspired by Microsoft.Extensions.DependencyInjection"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/s1ntropy/ferrous"
+repository = "https://github.com/s1ntropy/ferrous-di"
 keywords = ["dependency-injection", "di", "ioc", "inversion-of-control", "service-locator"]
 categories = ["rust-patterns", "config"]
 
@@ -44,6 +44,11 @@ performance = ["parking-lot", "ahash", "smallvec", "once-cell"]  # All perf feat
 [[example]]
 name = "web_server_scope"
 path = "examples/web_server_scope.rs"
+
+[[example]]
+name = "async_factory_demo"
+path = "examples/async_factory_demo.rs"
+required-features = ["async"]
 
 [[bench]]
 name = "di"
