@@ -473,6 +473,7 @@ mod tests {
         let mut provider = ConfigProvider::new();
         
         // Create a mock source
+        #[derive(Debug)]
         struct MockSource;
         impl ConfigSource for MockSource {
             fn get(&self, key: &str) -> Option<ConfigValue> {
@@ -520,6 +521,7 @@ mod tests {
     fn test_container_config_loading() {
         let mut provider = ConfigProvider::new();
         
+        #[derive(Debug)]
         struct TestConfigSource;
         impl ConfigSource for TestConfigSource {
             fn get(&self, key: &str) -> Option<ConfigValue> {

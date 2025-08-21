@@ -34,7 +34,9 @@ struct Product {
 #[derive(Clone)]
 struct TenantConfig {
     tenant_id: String,
+    #[allow(dead_code)] // Will be used in real multi-tenant implementation
     db_url: String,
+    #[allow(dead_code)] // Will be used in real multi-tenant implementation
     api_key: String,
     features: TenantFeatures,
 }
