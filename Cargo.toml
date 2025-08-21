@@ -12,6 +12,9 @@ categories = ["rust-patterns", "config"]
 [dependencies]
 async-trait = "0.1"
 tokio = { version = "1.0", features = ["sync", "rt", "rt-multi-thread", "macros", "time"], optional = true }
+axum = { version = "0.7", optional = true }
+tower = { version = "0.4", optional = true }
+hyper = { version = "1.0", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 serde_yaml = { version = "0.9", optional = true }
@@ -23,6 +26,8 @@ once_cell = { version = "1.0", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }
+axum = "0.7"
+serde = { version = "1.0", features = ["derive"] }
 criterion = { version = "0.5", features = ["html_reports"] }
 crossbeam-utils = "0.8"
 proptest = "1.4"
@@ -36,6 +41,7 @@ ahash = ["dep:ahash"]
 smallvec = ["dep:smallvec"]
 once-cell = ["dep:once_cell"]
 async = ["tokio"]  # Async/await support
+axum-integration = ["async", "axum", "tower", "hyper"]  # Axum web framework integration
 web = ["async"]  # Web framework integration support
 config = ["serde", "serde_json"]  # Configuration management
 graph-export = ["serde", "serde_json", "serde_yaml", "chrono"]  # Graph export functionality
@@ -49,6 +55,11 @@ path = "examples/web_server_scope.rs"
 name = "async_factory_demo"
 path = "examples/async_factory_demo.rs"
 required-features = ["async"]
+
+[[example]]
+name = "axum_multi_tenant"
+path = "examples/axum_multi_tenant.rs"
+required-features = ["axum-integration", "config"]
 
 [[bench]]
 name = "di"

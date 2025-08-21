@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 #[cfg(feature = "async")]
-use crate::async_di::{AsyncServiceProvider, AsyncScope};
+use crate::{ServiceProvider, Scope};
 
 /// Extension trait for Axum integration
 #[cfg(feature = "axum-integration")]

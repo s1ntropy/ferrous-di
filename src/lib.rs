@@ -125,6 +125,9 @@ pub mod config;
 #[cfg(feature = "async")]
 pub mod web_integration;
 
+#[cfg(feature = "axum-integration")]
+pub mod axum_integration;
+
 #[cfg(feature = "async")]
 pub mod async_factories;
 pub mod cancellation;
