@@ -5,9 +5,9 @@ An enterprise-grade, type-safe dependency injection framework for Rust with adva
 [![Crates.io](https://img.shields.io/crates/v/ferrous-di)](https://crates.io/crates/ferrous-di)
 [![Documentation](https://docs.rs/ferrous-di/badge.svg)](https://docs.rs/ferrous-di)
 [![License](https://img.shields.io/crates/l/ferrous-di)](LICENSE)
-[![Build Status](https://github.com/s1ntropy/ferrous/workflows/CI/badge.svg)](https://github.com/s1ntropy/ferrous/actions)
-[![Coverage](https://codecov.io/gh/s1ntropy/ferrous/branch/main/graph/badge.svg)](https://codecov.io/gh/s1ntropy/ferrous)
-[![Security Audit](https://github.com/s1ntropy/ferrous/workflows/Security%20Audit/badge.svg)](https://github.com/s1ntropy/ferrous/actions)
+[![Build Status](https://github.com/s1ntropy/ferrous-di/workflows/CI/badge.svg)](https://github.com/s1ntropy/ferrous-di/actions)
+[![Coverage](https://codecov.io/gh/s1ntropy/ferrous-di/branch/main/graph/badge.svg)](https://codecov.io/gh/s1ntropy/ferrous-di)
+[![Security Audit](https://github.com/s1ntropy/ferrous-di/workflows/Security%20Audit/badge.svg)](https://github.com/s1ntropy/ferrous-di/actions)
 
 ## Features
 
@@ -404,8 +404,8 @@ To reproduce benchmarks on your hardware:
 
 ```bash
 # Clone the repository
-git clone https://github.com/s1ntropy/ferrous
-cd ferrous
+git clone https://github.com/s1ntropy/ferrous-di
+cd ferrous-di
 
 # Run benchmarks with performance features
 cargo bench --features performance
@@ -700,7 +700,7 @@ Ferrous DI is actively developed and maintained with professional development pr
 
 **Ready for Production**: Suitable for enterprise applications requiring high performance, reliability, and maintainability.
 
-For questions, issues, or contributions, visit our [GitHub repository](https://github.com/s1ntropy/ferrous).
+For questions, issues, or contributions, visit our [GitHub repository](https://github.com/s1ntropy/ferrous-di).
 
 ## Architecture & Design Philosophy
 

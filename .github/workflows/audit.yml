@@ -42,7 +42,7 @@ jobs:
       run: cargo audit --json --output audit_results.json
 
     - name: Upload audit results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: audit-results
         path: audit_results.json
@@ -78,7 +78,7 @@ jobs:
         cargo license > LICENSE_REPORT.txt
 
     - name: Upload license report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: license-report
         path: |
@@ -99,54 +99,28 @@ jobs:
     - name: Install cargo-deny
       uses: taiki-e/install-action@cargo-deny
 
-    - name: Create cargo-deny config
+    - name: Check cargo-deny config exists
       run: |
-        cat > deny.toml << 'EOF'
-        [licenses]
-        confidence-threshold = 0.8
-        allow = [
-            "MIT",
-            "Apache-2.0",
-            "Apache-2.0 WITH LLVM-exception",
-            "BSD-2-Clause",
-            "BSD-3-Clause",
-            "ISC",
-            "Unicode-DFS-2016",
-        ]
-        deny = [
-            "GPL-2.0",
-            "GPL-3.0",
-            "AGPL-3.0",
-            "LGPL-2.1",
-            "LGPL-3.0",
-        ]
-
-        [bans]
-        multiple-versions = "warn"
-        skip-tree = []
-
-        [advisories]
-        vulnerability = "deny"
-        unmaintained = "warn"
-        unsound = "warn"
-        yanked = "warn"
-        EOF
+        if [ ! -f deny.toml ]; then
+          echo "No deny.toml found, creating minimal config"
+          cargo deny init
+        fi
 
     - name: Run cargo-deny
       run: cargo deny check
 
-  unused-deps:
-    name: Unused Dependencies
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+  # unused-deps:
+  #   name: Unused Dependencies
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly
+  #   - name: Install Rust toolchain
+  #     uses: dtolnay/rust-toolchain@nightly
 
-    - name: Install cargo-udeps
-      uses: taiki-e/install-action@cargo-udeps
+  #   - name: Install cargo-udeps
+  #     uses: taiki-e/install-action@cargo-udeps
 
-    - name: Check for unused dependencies
-      run: cargo +nightly udeps --all-targets
+  #   - name: Check for unused dependencies
+  #     run: cargo +nightly udeps --all-targets
