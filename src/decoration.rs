@@ -210,15 +210,21 @@ impl<T: Send + Sync + 'static> DecorationAny for DecorationWrapper<T> {
 }
 
 /// Type-erased trait decoration for internal pipeline management.
-trait TraitDecorationAny: Send + Sync {
+pub(crate) trait TraitDecorationAny: Send + Sync {
     fn decorate_trait_any(&self, original: crate::registration::AnyArc, resolver: &dyn ResolverCore) -> crate::registration::AnyArc;
 }
 
-impl<T: ?Sized + Send + Sync + 'static> TraitDecorationAny for TraitDecorationWrapper<T> {
-    fn decorate_trait_any(&self, original: crate::registration::AnyArc, _resolver: &dyn ResolverCore) -> crate::registration::AnyArc {
-        // This is more complex due to trait object handling
-        // For now, we'll need to handle this in the ServiceCollection implementation
-        original
+impl<T: Send + Sync + 'static> TraitDecorationAny for TraitDecorationWrapper<T> {
+    fn decorate_trait_any(&self, original: crate::registration::AnyArc, resolver: &dyn ResolverCore) -> crate::registration::AnyArc {
+        // Attempt to downcast the trait object to the concrete type
+        if let Ok(concrete) = original.clone().downcast::<T>() {
+            // Apply decoration and upcast back to AnyArc
+            let decorated = self.decorator.decorate(concrete, resolver);
+            decorated as crate::registration::AnyArc
+        } else {
+            // If downcast fails, return original (this could happen with trait objects)
+            original
+        }
     }
 }
 
@@ -240,7 +246,7 @@ impl DecorationPipeline {
     }
 
     /// Adds a trait decorator to the pipeline.
-    pub fn add_trait_decorator<T: ?Sized + Send + Sync + 'static>(&mut self, decorator: impl TraitDecorator<T> + 'static) {
+    pub fn add_trait_decorator<T: Send + Sync + 'static>(&mut self, decorator: impl TraitDecorator<T> + 'static) {
         let type_id = TypeId::of::<T>();
         let wrapper = TraitDecorationWrapper::new(decorator);
         
@@ -266,12 +272,17 @@ impl DecorationPipeline {
     }
 
     /// Applies all decorators for a trait type.
-    ///
-    /// Note: Due to limitations with trait object downcasting, this is currently a placeholder.
-    /// Trait decoration should be handled at the registration level in ServiceCollection.
-    pub fn decorate_trait<T: ?Sized + Send + Sync + 'static>(&self, service: Arc<T>, _resolver: &dyn ResolverCore) -> Arc<T> {
-        // For now, just return the original service
-        // Full trait decoration is implemented in ServiceCollection::decorate_trait_with
+    pub fn decorate_trait<T: Send + Sync + 'static>(&self, mut service: Arc<T>, resolver: &dyn ResolverCore) -> Arc<T> {
+        let type_id = TypeId::of::<T>();
+        
+        if let Some(decorators) = self.trait_decorators.get(&type_id) {
+            for decorator in decorators {
+                let any_service = service.clone() as crate::registration::AnyArc;
+                let decorated_any = decorator.decorate_trait_any(any_service, resolver);
+                service = decorated_any.downcast::<T>().expect("Type mismatch in trait decoration pipeline");
+            }
+        }
+        
         service
     }
 
@@ -282,7 +293,7 @@ impl DecorationPipeline {
     }
 
     /// Returns true if there are decorators for the given trait type.
-    pub fn has_trait_decorators<T: ?Sized + Send + Sync + 'static>(&self) -> bool {
+    pub fn has_trait_decorators<T: Send + Sync + 'static>(&self) -> bool {
         let type_id = TypeId::of::<T>();
         self.trait_decorators.contains_key(&type_id)
     }

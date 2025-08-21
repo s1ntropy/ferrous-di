@@ -241,7 +241,36 @@ impl DefaultGraphExporter {
         }
         #[cfg(not(feature = "graph-export"))]
         {
-            Err(crate::DiError::NotFound("JSON export requires 'graph-export' feature"))
+            // Fallback manual JSON generation
+            let mut json = String::from("{\n");
+            json.push_str(&format!("  \"metadata\": {{\n"));
+            json.push_str(&format!("    \"service_count\": {},\n", graph.metadata.service_count));
+            json.push_str(&format!("    \"trait_count\": {},\n", graph.metadata.trait_count));
+            json.push_str(&format!("    \"exported_at\": \"{}\"\n", graph.metadata.exported_at));
+            json.push_str("  },\n");
+            json.push_str("  \"nodes\": [\n");
+            for (i, node) in graph.nodes.iter().enumerate() {
+                if i > 0 { json.push_str(",\n"); }
+                json.push_str(&format!("    {{\n"));
+                json.push_str(&format!("      \"id\": \"{}\",\n", node.id));
+                json.push_str(&format!("      \"type_name\": \"{}\",\n", node.type_name));
+                json.push_str(&format!("      \"is_trait\": {},\n", node.is_trait));
+                json.push_str(&format!("      \"lifetime\": \"{:?}\"\n", node.lifetime));
+                json.push_str("    }");
+            }
+            json.push_str("\n  ],\n");
+            json.push_str("  \"edges\": [\n");
+            for (i, edge) in graph.edges.iter().enumerate() {
+                if i > 0 { json.push_str(",\n"); }
+                json.push_str(&format!("    {{\n"));
+                json.push_str(&format!("      \"from\": \"{}\",\n", edge.from));
+                json.push_str(&format!("      \"to\": \"{}\",\n", edge.to));
+                json.push_str(&format!("      \"dependency_type\": \"{:?}\"\n", edge.dependency_type));
+                json.push_str("    }");
+            }
+            json.push_str("\n  ]\n");
+            json.push_str("}");
+            Ok(json)
         }
     }
 
@@ -254,7 +283,26 @@ impl DefaultGraphExporter {
         }
         #[cfg(not(feature = "graph-export"))]
         {
-            Err(crate::DiError::NotFound("YAML export requires 'graph-export' feature"))
+            // Fallback manual YAML generation
+            let mut yaml = String::new();
+            yaml.push_str("metadata:\n");
+            yaml.push_str(&format!("  service_count: {}\n", graph.metadata.service_count));
+            yaml.push_str(&format!("  trait_count: {}\n", graph.metadata.trait_count));
+            yaml.push_str(&format!("  exported_at: \"{}\"\n", graph.metadata.exported_at));
+            yaml.push_str("nodes:\n");
+            for node in &graph.nodes {
+                yaml.push_str(&format!("  - id: \"{}\"\n", node.id));
+                yaml.push_str(&format!("    type_name: \"{}\"\n", node.type_name));
+                yaml.push_str(&format!("    is_trait: {}\n", node.is_trait));
+                yaml.push_str(&format!("    lifetime: {:?}\n", node.lifetime));
+            }
+            yaml.push_str("edges:\n");
+            for edge in &graph.edges {
+                yaml.push_str(&format!("  - from: \"{}\"\n", edge.from));
+                yaml.push_str(&format!("    to: \"{}\"\n", edge.to));
+                yaml.push_str(&format!("    dependency_type: {:?}\n", edge.dependency_type));
+            }
+            Ok(yaml)
         }
     }
 
@@ -396,16 +444,130 @@ impl GraphBuilder {
         let mut edges = Vec::new();
         let mut node_ids: HashMap<String, String> = HashMap::new();
 
-        // For now, we'll build a simple graph based on available information
-        // In a full implementation, this would introspect the actual service registrations
+        // Introspect actual service registrations from the provider
+        let registry = &provider.inner().registry;
         
-        // Create sample nodes to demonstrate the structure
+        // Process single-binding services from small Vec
+        for (key, registration) in &registry.one_small {
+            let node_id = format!("service_{}", nodes.len());
+            let service_name = key.display_name();
+            
+            // Create node for this service
+            let node = GraphNode {
+                id: node_id.clone(),
+                type_name: service_name.to_string(),
+                lifetime: format!("{:?}", registration.lifetime),
+                is_trait: matches!(key, crate::Key::Trait(_)),
+                dependencies: Vec::new(), // TODO: Extract from factory functions
+                metadata: {
+                    let mut meta = HashMap::new();
+                    meta.insert("key".to_string(), service_name.to_string());
+                    meta.insert("lifetime".to_string(), format!("{:?}", registration.lifetime));
+                    meta
+                },
+                position: None,
+            };
+            
+            node_ids.insert(service_name.to_string(), node_id.clone());
+            nodes.push(node);
+        }
+        
+        // Process single-binding services from large HashMap
+        for (key, registration) in &registry.one_large {
+            let node_id = format!("service_{}", nodes.len());
+            let service_name = key.display_name();
+            
+            // Create node for this service
+            let node = GraphNode {
+                id: node_id.clone(),
+                type_name: service_name.to_string(),
+                lifetime: format!("{:?}", registration.lifetime),
+                is_trait: matches!(key, crate::Key::Trait(_)),
+                dependencies: Vec::new(), // TODO: Extract from factory functions
+                metadata: {
+                    let mut meta = HashMap::new();
+                    meta.insert("key".to_string(), service_name.to_string());
+                    meta.insert("lifetime".to_string(), format!("{:?}", registration.lifetime));
+                    meta
+                },
+                position: None,
+            };
+            
+            node_ids.insert(service_name.to_string(), node_id.clone());
+            nodes.push(node);
+        }
+        
+        // Process multi-binding trait services
+        for (trait_name, registrations) in &registry.many {
+            for (idx, registration) in registrations.iter().enumerate() {
+                let node_id = format!("trait_impl_{}_{}", trait_name.replace("::", "_"), idx);
+                let service_name = format!("{}[{}]", trait_name, idx);
+                
+                let node = GraphNode {
+                    id: node_id.clone(),
+                    type_name: service_name.to_string(),
+                    lifetime: format!("{:?}", registration.lifetime),
+                    is_trait: true,
+                    dependencies: Vec::new(), // TODO: Extract from factory functions
+                    metadata: {
+                        let mut meta = HashMap::new();
+                        meta.insert("trait_name".to_string(), trait_name.to_string());
+                        meta.insert("implementation_index".to_string(), idx.to_string());
+                        meta.insert("lifetime".to_string(), format!("{:?}", registration.lifetime));
+                        meta
+                    },
+                    position: None,
+                };
+                
+                node_ids.insert(service_name.to_string(), node_id.clone());
+                nodes.push(node);
+            }
+        }
+        
+        // Add dependency analysis by runtime introspection
+        self.analyze_dependencies(provider, &mut nodes, &mut edges, &node_ids)?;
+        
+        // Calculate metadata counts
+        let trait_count = registry.many.len();
+        let mut singleton_count = 0;
+        let mut scoped_count = 0;
+        let mut transient_count = 0;
+        
+        // Count lifetimes from single services (small Vec)
+        for (_key, registration) in &registry.one_small {
+            match registration.lifetime {
+                crate::Lifetime::Singleton => singleton_count += 1,
+                crate::Lifetime::Scoped => scoped_count += 1,
+                crate::Lifetime::Transient => transient_count += 1,
+            }
+        }
+        
+        // Count lifetimes from single services (large HashMap)
+        for (_key, registration) in &registry.one_large {
+            match registration.lifetime {
+                crate::Lifetime::Singleton => singleton_count += 1,
+                crate::Lifetime::Scoped => scoped_count += 1,
+                crate::Lifetime::Transient => transient_count += 1,
+            }
+        }
+        
+        // Count lifetimes from multi-binding services
+        for (_trait_name, registrations) in &registry.many {
+            for registration in registrations {
+                match registration.lifetime {
+                    crate::Lifetime::Singleton => singleton_count += 1,
+                    crate::Lifetime::Scoped => scoped_count += 1,
+                    crate::Lifetime::Transient => transient_count += 1,
+                }
+            }
+        }
+        
         let metadata = GraphMetadata {
             service_count: nodes.len(),
-            trait_count: 0,
-            singleton_count: 0,
-            scoped_count: 0,
-            transient_count: 0,
+            trait_count,
+            singleton_count,
+            scoped_count,
+            transient_count,
             has_circular_dependencies: false,
             exported_at: {
                 #[cfg(feature = "graph-export")]
@@ -433,6 +595,215 @@ impl GraphBuilder {
             metadata,
             layout,
         })
+    }
+
+    /// Analyzes dependencies by runtime introspection of factory functions.
+    ///
+    /// This method executes factory functions in a controlled environment
+    /// to capture what dependencies they actually request.
+    fn analyze_dependencies(
+        &self,
+        provider: &crate::ServiceProvider,
+        nodes: &mut Vec<GraphNode>,
+        edges: &mut Vec<GraphEdge>,
+        node_ids: &HashMap<String, String>,
+    ) -> crate::DiResult<()> {
+        use std::sync::{Arc, Mutex};
+        use crate::provider::context::ResolverContext;
+        use crate::traits::ResolverCore;
+        
+        // Create a dependency tracking resolver wrapper
+        struct DependencyTracker {
+            inner: Arc<dyn ResolverCore>,
+            dependencies: Arc<Mutex<Vec<String>>>,
+        }
+        
+        impl ResolverCore for DependencyTracker {
+            fn resolve_any(&self, key: &crate::Key) -> crate::DiResult<crate::registration::AnyArc> {
+                // Record this dependency
+                if let Ok(mut deps) = self.dependencies.lock() {
+                    deps.push(key.display_name().to_string());
+                }
+                // Delegate to the real resolver
+                self.inner.resolve_any(key)
+            }
+
+            fn resolve_many(&self, key: &crate::Key) -> crate::DiResult<Vec<std::sync::Arc<dyn std::any::Any + Send + Sync>>> {
+                // Record this dependency
+                if let Ok(mut deps) = self.dependencies.lock() {
+                    deps.push(format!("{}[*]", key.display_name()));
+                }
+                // Delegate to the real resolver
+                self.inner.resolve_many(key)
+            }
+
+            fn push_sync_disposer(&self, f: Box<dyn FnOnce() + Send>) {
+                // Delegate to the real resolver
+                self.inner.push_sync_disposer(f);
+            }
+
+            fn push_async_disposer(&self, f: Box<dyn FnOnce() -> crate::internal::BoxFutureUnit + Send>) {
+                // Delegate to the real resolver
+                self.inner.push_async_disposer(f);
+            }
+        }
+        
+        let registry = &provider.inner().registry;
+        
+        // Analyze dependencies for single-binding services from small Vec
+        for (key, registration) in &registry.one_small {
+            let service_name = key.display_name();
+            if let Some(from_node_id) = node_ids.get(service_name) {
+                // Create dependency tracking wrapper
+                let dependencies = Arc::new(Mutex::new(Vec::new()));
+                let tracker = DependencyTracker {
+                    inner: Arc::new(provider.clone()),
+                    dependencies: dependencies.clone(),
+                };
+                
+                // Execute factory with dependency tracking (ignore result, we just want dependencies)
+                let ctx = ResolverContext::new(&tracker);
+                let _ = (registration.ctor)(&ctx); // Ignore errors during analysis
+                
+                // Extract captured dependencies
+                let captured_deps = {
+                    if let Ok(deps) = dependencies.lock() {
+                        deps.clone()
+                    } else {
+                        Vec::new()
+                    }
+                };
+                
+                for dep_name in &captured_deps {
+                    if let Some(to_node_id) = node_ids.get(dep_name) {
+                        // Create edge from this service to its dependency
+                        edges.push(GraphEdge {
+                            from: from_node_id.clone(),
+                            to: to_node_id.clone(),
+                            dependency_type: DependencyType::Required,
+                            metadata: {
+                                let mut meta = HashMap::new();
+                                meta.insert("source".to_string(), "factory_analysis".to_string());
+                                meta.insert("dependency_name".to_string(), dep_name.clone());
+                                meta
+                            },
+                        });
+                        
+                        // Update the node's dependencies list
+                        if let Some(node) = nodes.iter_mut().find(|n| n.id == *from_node_id) {
+                            if !node.dependencies.contains(dep_name) {
+                                node.dependencies.push(dep_name.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Analyze dependencies for single-binding services from large HashMap
+        for (key, registration) in &registry.one_large {
+            let service_name = key.display_name();
+            if let Some(from_node_id) = node_ids.get(service_name) {
+                // Create dependency tracking wrapper
+                let dependencies = Arc::new(Mutex::new(Vec::new()));
+                let tracker = DependencyTracker {
+                    inner: Arc::new(provider.clone()),
+                    dependencies: dependencies.clone(),
+                };
+                
+                // Execute factory with dependency tracking (ignore result, we just want dependencies)
+                let ctx = ResolverContext::new(&tracker);
+                let _ = (registration.ctor)(&ctx); // Ignore errors during analysis
+                
+                // Extract captured dependencies
+                let captured_deps = {
+                    if let Ok(deps) = dependencies.lock() {
+                        deps.clone()
+                    } else {
+                        Vec::new()
+                    }
+                };
+                
+                for dep_name in &captured_deps {
+                    if let Some(to_node_id) = node_ids.get(dep_name) {
+                        // Create edge from this service to its dependency
+                        edges.push(GraphEdge {
+                            from: from_node_id.clone(),
+                            to: to_node_id.clone(),
+                            dependency_type: DependencyType::Required,
+                            metadata: {
+                                let mut meta = HashMap::new();
+                                meta.insert("source".to_string(), "factory_analysis".to_string());
+                                meta.insert("dependency_name".to_string(), dep_name.clone());
+                                meta
+                            },
+                        });
+                        
+                        // Update the node's dependencies list
+                        if let Some(node) = nodes.iter_mut().find(|n| n.id == *from_node_id) {
+                            if !node.dependencies.contains(dep_name) {
+                                node.dependencies.push(dep_name.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Analyze dependencies for multi-binding trait services
+        for (trait_name, registrations) in &registry.many {
+            for (idx, registration) in registrations.iter().enumerate() {
+                let service_name = format!("{}[{}]", trait_name, idx);
+                if let Some(from_node_id) = node_ids.get(&service_name) {
+                    // Create dependency tracking wrapper
+                    let dependencies = Arc::new(Mutex::new(Vec::new()));
+                    let tracker = DependencyTracker {
+                        inner: Arc::new(provider.clone()),
+                        dependencies: dependencies.clone(),
+                    };
+                    
+                    // Execute factory with dependency tracking
+                    let ctx = ResolverContext::new(&tracker);
+                    let _ = (registration.ctor)(&ctx); // Ignore errors during analysis
+                    
+                    // Extract captured dependencies
+                    let captured_deps = {
+                        if let Ok(deps) = dependencies.lock() {
+                            deps.clone()
+                        } else {
+                            Vec::new()
+                        }
+                    };
+                    
+                    for dep_name in &captured_deps {
+                        if let Some(to_node_id) = node_ids.get(dep_name) {
+                            // Create edge from this service to its dependency
+                            edges.push(GraphEdge {
+                                from: from_node_id.clone(),
+                                to: to_node_id.clone(),
+                                dependency_type: DependencyType::Required,
+                                metadata: {
+                                    let mut meta = HashMap::new();
+                                    meta.insert("source".to_string(), "factory_analysis".to_string());
+                                    meta.insert("dependency_name".to_string(), dep_name.clone());
+                                    meta.insert("trait_implementation".to_string(), idx.to_string());
+                                    meta
+                                },
+                            });
+                            
+                            // Update the node's dependencies list
+                            if let Some(node) = nodes.iter_mut().find(|n| n.id == *from_node_id) {
+                                if !node.dependencies.contains(dep_name) {
+                                    node.dependencies.push(dep_name.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(())
     }
 
     /// Exports the dependency graph in the specified format.

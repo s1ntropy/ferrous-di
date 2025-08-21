@@ -14,6 +14,7 @@ use crate::prewarm::PrewarmSet;
 use crate::capabilities::CapabilityRegistry;
 use crate::ServiceProvider;
 
+
 pub mod module_system;
 pub use module_system::*;
 
@@ -1365,15 +1366,52 @@ impl ServiceCollection {
     #[cfg(feature = "async")]
     pub fn add_singleton_async<T, F>(&mut self, factory: F) -> &mut Self
     where
-        T: Send + Sync + 'static,
+        T: Send + Sync + Clone + 'static,
         F: crate::async_factories::AsyncFactory<T> + 'static,
     {
         use crate::async_factories::AsyncFactoryWrapper;
         
         let wrapper = AsyncFactoryWrapper::new(factory);
-        // Store the async factory wrapper - actual implementation would need
-        // to be integrated with the ServiceProvider's async resolution
-        // For now, this is the API structure
+        
+        // Create a sync factory that executes the async factory in a blocking context
+        let sync_factory = move |resolver: &ResolverContext| -> Arc<T> {
+            // Try to get current tokio runtime handle
+            if let Ok(_handle) = tokio::runtime::Handle::try_current() {
+                // We're in an async context, but we can't block_on from within the runtime
+                // Instead, use block_in_place to run the async task
+                let future = wrapper.create(resolver);
+                let result = tokio::task::block_in_place(|| {
+                    // Create a new runtime for this blocking task
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("Failed to create blocking runtime");
+                    rt.block_on(future)
+                });
+                
+                match result {
+                    Ok(result) => result,
+                    Err(e) => {
+                        panic!("Async factory failed: {}", e);
+                    }
+                }
+            } else {
+                // No async runtime, create a new one for this operation
+                let rt = tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to create async runtime");
+                match rt.block_on(wrapper.create(resolver)) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        panic!("Async factory failed: {}", e);
+                    }
+                }
+            }
+        };
+        
+        // Register as singleton with the sync factory that returns Arc<T>
+        self.add_singleton_factory::<Arc<T>, _>(sync_factory);
         self
     }
 
@@ -1400,13 +1438,52 @@ impl ServiceCollection {
     #[cfg(feature = "async")]
     pub fn add_scoped_async<T, F>(&mut self, factory: F) -> &mut Self
     where
-        T: Send + Sync + 'static,
+        T: Send + Sync + Clone + 'static,
         F: crate::async_factories::AsyncFactory<T> + 'static,
     {
         use crate::async_factories::AsyncFactoryWrapper;
         
         let wrapper = AsyncFactoryWrapper::new(factory);
-        // Store the async factory wrapper for scoped lifetime
+        
+        // Create a sync factory that executes the async factory in a blocking context
+        let sync_factory = move |resolver: &ResolverContext| -> Arc<T> {
+            // Try to get current tokio runtime handle
+            if let Ok(_handle) = tokio::runtime::Handle::try_current() {
+                // We're in an async context, but we can't block_on from within the runtime
+                // Instead, use spawn_blocking to run the async task
+                let future = wrapper.create(resolver);
+                let result = tokio::task::block_in_place(|| {
+                    // Create a new runtime for this blocking task
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("Failed to create blocking runtime");
+                    rt.block_on(future)
+                });
+                
+                match result {
+                    Ok(result) => result,
+                    Err(e) => {
+                        panic!("Async factory failed: {}", e);
+                    }
+                }
+            } else {
+                // No async runtime, create a new one for this operation
+                let rt = tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to create async runtime");
+                match rt.block_on(wrapper.create(resolver)) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        panic!("Async factory failed: {}", e);
+                    }
+                }
+            }
+        };
+        
+        // Register as scoped with the sync factory that returns Arc<T>
+        self.add_scoped_factory::<Arc<T>, _>(sync_factory);
         self
     }
 }

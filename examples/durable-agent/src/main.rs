@@ -165,7 +165,7 @@ async fn resume_workflow(run_id: String) -> Result<()> {
         // Rehydrate workflow state
         let rehydrated_context = rehydrate_workflow(&run_id, &resolver).await?;
         
-        if let Some(mut context) = rehydrated_context {
+        if let Some(context) = rehydrated_context {
             println!("📊 Resuming from step {}", context.step);
             
             // Update the scoped RunContext
@@ -202,7 +202,7 @@ async fn list_checkpoints(run_id: String) -> Result<()> {
     let provider = build_service_provider(run_id.clone(), "query".to_string());
     let scope = provider.create_scope();
     
-    scope.using(|resolver| async move {
+    scope.using(|_resolver| async move {
         // For demo purposes, skip checkpoint service resolution  
         // let checkpoint_service = resolver.get_required_trait::<dyn CheckpointService>();
         // let checkpoints = checkpoint_service.list_checkpoints(&run_id).await?;
@@ -227,18 +227,43 @@ async fn list_checkpoints(run_id: String) -> Result<()> {
     Ok(())
 }
 
-/// Export dependency graph
+/// Export dependency graph showcasing ferrous-di's runtime introspection capabilities
 fn export_graph() -> Result<()> {
-    println!("📊 Exporting dependency graph...");
+    println!("📊 Exporting dependency graph with runtime dependency analysis...");
+    println!();
     
     let provider = build_service_provider("graph-export".to_string(), "demo".to_string());
     
     match export_workflow_graph(&provider) {
-        Ok(mermaid) => {
-            println!("Graph exported as Mermaid format:");
-            println!("```mermaid");
-            println!("{}", mermaid);
-            println!("```");
+        Ok(graph_output) => {
+            println!("{}", graph_output);
+            
+            // Also show convenience exports
+            println!("\n🚀 Convenience Export Functions:");
+            
+            // JSON export
+            if let Ok(json) = ferrous_di::graph_export::exports::to_json(&provider) {
+                println!("\n📋 Quick JSON export (ferrous_di::graph_export::exports::to_json):");
+                let lines: Vec<&str> = json.lines().collect();
+                for line in lines.iter().take(15) {
+                    println!("  {}", line);
+                }
+                if lines.len() > 15 {
+                    println!("  ... ({} more lines)", lines.len() - 15);
+                }
+            }
+            
+            // YAML export  
+            if let Ok(yaml) = ferrous_di::graph_export::exports::to_yaml(&provider) {
+                println!("\n📄 Quick YAML export (ferrous_di::graph_export::exports::to_yaml):");
+                let lines: Vec<&str> = yaml.lines().collect();
+                for line in lines.iter().take(10) {
+                    println!("  {}", line);
+                }
+                if lines.len() > 10 {
+                    println!("  ... ({} more lines)", lines.len() - 10);
+                }
+            }
         }
         Err(e) => {
             println!("❌ Graph export failed: {}", e);
@@ -259,7 +284,7 @@ fn print_help() {
     println!("    run <workflow_name> [crash_after_step]  Run a new workflow");
     println!("    resume <run_id>                         Resume from checkpoint");
     println!("    list <run_id>                          List checkpoints");
-    println!("    graph                                   Export dependency graph");
+    println!("    graph                                   Export dependency graph (runtime analysis)");
     println!("    help                                    Show this help");
     println!();
     println!("EXAMPLES:");
@@ -267,14 +292,15 @@ fn print_help() {
     println!("    durable-agent run my-workflow 2         # Crash after step 2");
     println!("    durable-agent resume run-12345          # Resume from checkpoint");
     println!("    durable-agent list run-12345            # Show checkpoints");
-    println!("    durable-agent graph                     # Export graph");
+    println!("    durable-agent graph                     # Export dependency graph with runtime analysis");
     println!();
     println!("This demo showcases:");
     println!("  • 🔄 Workflow execution with checkpointing");
     println!("  • 🚀 Service registration via extension methods");
     println!("  • 💾 Crash recovery and state rehydration");
     println!("  • 🔍 Observer correlation across steps");
-    println!("  • 📊 Dependency graph visualization");
+    println!("  • 📊 Runtime dependency analysis & graph export");
+    println!("  • 🎯 Real service introspection with dependency tracking");
 }
 
 /// Demonstrate concurrent workflow execution
@@ -309,7 +335,7 @@ async fn demo_concurrent_workflows() -> Result<()> {
     // Wait for all workflows to complete
     for (i, handle) in handles.into_iter().enumerate() {
         match handle.await? {
-            Ok(result) => println!("  ✅ Concurrent workflow {} completed", i),
+            Ok(_result) => println!("  ✅ Concurrent workflow {} completed", i),
             Err(e) => println!("  ❌ Concurrent workflow {} failed: {}", i, e),
         }
     }
@@ -419,7 +445,7 @@ mod tests {
         let provider = build_service_provider("checkpoint-test".to_string(), "test".to_string());
         let scope = provider.create_scope();
         
-        scope.using(|resolver| async move {
+        scope.using(|_resolver| async move {
             // For demo purposes, create services directly
             let store = Arc::new(InMemoryStateStore::default());
             let serializer = Arc::new(JsonSerializer);

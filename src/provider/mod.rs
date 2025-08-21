@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use crate::{DiResult, DiError, Key, Lifetime};
 use crate::registration::{Registry, AnyArc};
 use crate::internal::{DisposeBag, BoxFutureUnit, with_circular_catch};
-use crate::observer::Observers;
+use crate::observer::{Observers, ObservationContext};
 use crate::capabilities::{CapabilityRegistry, ToolSelectionCriteria, ToolDiscoveryResult, ToolInfo};
 use crate::fast_singletons::FastSingletonCache;
 use crate::traits::{Resolver, ResolverCore, Dispose, AsyncDispose};
@@ -337,6 +337,25 @@ impl ServiceProvider {
         (reg.ctor)(&ctx)
     }
     
+    /// Creates observation context from available scope-local data.
+    fn create_observation_context(&self) -> ObservationContext {
+        // Try to extract workflow context from scope-local storage
+        // This allows rich observation when workflow context is available
+        use crate::scope_local::{ScopeLocal, WorkflowContext};
+        
+        // Attempt to get workflow context if available
+        if let Ok(workflow_ctx) = self.get::<ScopeLocal<WorkflowContext>>() {
+            ObservationContext::workflow(
+                workflow_ctx.run_id(),
+                workflow_ctx.workflow_name(),
+                None::<String>
+            )
+        } else {
+            // Fallback to basic context
+            ObservationContext::new()
+        }
+    }
+    
     fn resolve_any_impl(&self, key: &Key) -> DiResult<AnyArc> {
         let name = key.display_name();
         
@@ -346,12 +365,13 @@ impl ServiceProvider {
                     // Observer support with optimized path
                     if self.inner().observers.has_observers() {
                         let start = std::time::Instant::now();
-                        self.inner().observers.resolving(key);
+                        let context = self.create_observation_context();
+                        self.inner().observers.resolving_with_context(key, &context);
                         
                         let result = self.resolve_singleton(reg, key);
                         
                         let duration = start.elapsed();
-                        self.inner().observers.resolved(key, duration);
+                        self.inner().observers.resolved_with_context(key, duration, &context);
                         result
                     } else {
                         // Ultra-fast path: no observer overhead
@@ -364,7 +384,8 @@ impl ServiceProvider {
                 Lifetime::Transient => {
                     if self.inner().observers.has_observers() {
                         let start = std::time::Instant::now();
-                        self.inner().observers.resolving(key);
+                        let context = self.create_observation_context();
+                        self.inner().observers.resolving_with_context(key, &context);
                         
                         let ctx = LocalResolverContext::new(self);
                         let result = (reg.ctor)(&ctx);
@@ -372,11 +393,11 @@ impl ServiceProvider {
                         match &result {
                             Ok(_) => {
                                 let duration = start.elapsed();
-                                self.inner().observers.resolved(key, duration);
+                                self.inner().observers.resolved_with_context(key, duration, &context);
                             }
                             Err(_) => {
                                 let duration = start.elapsed();
-                                self.inner().observers.resolved(key, duration);
+                                self.inner().observers.resolved_with_context(key, duration, &context);
                             }
                         }
                         result
@@ -392,7 +413,8 @@ impl ServiceProvider {
                 if let Some(last) = regs.last() {
                     if self.inner().observers.has_observers() {
                         let start = std::time::Instant::now();
-                        self.inner().observers.resolving(key);
+                        let context = self.create_observation_context();
+                        self.inner().observers.resolving_with_context(key, &context);
                         
                         let ctx = LocalResolverContext::new(self);
                         let result = (last.ctor)(&ctx);
@@ -400,11 +422,11 @@ impl ServiceProvider {
                         match &result {
                             Ok(_) => {
                                 let duration = start.elapsed();
-                                self.inner().observers.resolved(key, duration);
+                                self.inner().observers.resolved_with_context(key, duration, &context);
                             }
                             Err(_) => {
                                 let duration = start.elapsed();
-                                self.inner().observers.resolved(key, duration);
+                                self.inner().observers.resolved_with_context(key, duration, &context);
                             }
                         }
                         result

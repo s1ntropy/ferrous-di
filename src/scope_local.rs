@@ -501,8 +501,8 @@ macro_rules! scope_local {
 
 /// Extensions for working with scope-local values in workflow contexts.
 pub mod workflow {
-    use super::ScopeLocal;
-    use std::sync::Arc;
+    
+    
 
     /// Standard security context for workflow engines.
     #[derive(Debug, Clone)]

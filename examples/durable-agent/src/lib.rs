@@ -1102,17 +1102,63 @@ impl GraphExporter for DefaultGraphExporter {
     }
 }
 
-/// Export workflow dependencies as a graph (simplified demo)
+/// Export workflow dependencies as a graph using ferrous-di's graph export features
 pub fn export_workflow_graph(provider: &ServiceProvider) -> Result<String> {
-    // In a real implementation, would use ferrous-di's graph export features
-    let graph = GraphBuilder::new()
-        .build_graph(provider)
+    // Use the actual ferrous-di graph export system
+    use ferrous_di::graph_export::{GraphBuilder, ExportFormat};
+    
+    let graph_builder = GraphBuilder::new();
+    let graph = graph_builder.build_graph(provider)
         .map_err(|e| anyhow::anyhow!("Graph build error: {}", e))?;
+    
+    // Export in multiple formats to show the capabilities
+    let mermaid = graph_builder.export(&graph, ExportFormat::Mermaid)
+        .map_err(|e| anyhow::anyhow!("Mermaid export error: {}", e))?;
+    
+    let json = graph_builder.export(&graph, ExportFormat::Json)
+        .map_err(|e| anyhow::anyhow!("JSON export error: {}", e))?;
+    
+    let dot = graph_builder.export(&graph, ExportFormat::Dot)
+        .map_err(|e| anyhow::anyhow!("DOT export error: {}", e))?;
+    
+    // Return a comprehensive output showing all formats
+    Ok(format!(
+        r#"📊 Ferrous-DI Dependency Graph Export
 
-    // Export as Mermaid format
-    let exporter = DefaultGraphExporter;
-    exporter.export(&graph, ExportFormat::Mermaid, &ExportOptions::default())
-        .map_err(|e| anyhow::anyhow!("Graph export error: {}", e))
+🔍 Graph Metadata:
+- Services: {}
+- Traits: {}
+- Singletons: {}
+- Scoped: {}
+- Transients: {}
+- Has Circular Dependencies: {}
+- Export Time: {}
+
+📈 Mermaid Format (for documentation):
+```mermaid
+{}
+```
+
+🔗 DOT Format (for Graphviz):
+```dot
+{}
+```
+
+📋 JSON Format (for APIs):
+```json
+{}
+```"#,
+        graph.metadata.service_count,
+        graph.metadata.trait_count,
+        graph.metadata.singleton_count,
+        graph.metadata.scoped_count,
+        graph.metadata.transient_count,
+        graph.metadata.has_circular_dependencies,
+        graph.metadata.exported_at,
+        mermaid,
+        dot,
+        json
+    ))
 }
 
 #[cfg(test)]

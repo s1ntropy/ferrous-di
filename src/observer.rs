@@ -199,20 +199,29 @@ pub trait DiObserver: Send + Sync {
     /// Called when starting to resolve a service with workflow context.
     ///
     /// Enhanced version that includes workflow execution context for correlation.
-    /// Default implementation delegates to `resolving()`.
+    /// Default implementation calls `resolving()` and logs basic context info.
     ///
     /// # Arguments
     ///
     /// * `key` - The service key being resolved
     /// * `context` - Workflow execution context for correlation
     fn resolving_with_context(&self, key: &Key, context: &ObservationContext) {
+        // Call the basic method first
         self.resolving(key);
+        
+        // Provide basic context logging in default implementation
+        if let Some(run_id) = &context.run_id {
+            if let Some(workflow_name) = &context.workflow_name {
+                println!("[{}] [{}] Starting resolution: {}", 
+                    run_id, workflow_name, key.display_name());
+            }
+        }
     }
 
     /// Called when a service is successfully resolved with workflow context.
     ///
     /// Enhanced version that includes workflow execution context for correlation.
-    /// Default implementation delegates to `resolved()`.
+    /// Default implementation calls `resolved()` and logs basic context info.
     ///
     /// # Arguments
     ///
@@ -220,13 +229,22 @@ pub trait DiObserver: Send + Sync {
     /// * `duration` - Time elapsed from `resolving` to `resolved`
     /// * `context` - Workflow execution context for correlation
     fn resolved_with_context(&self, key: &Key, duration: std::time::Duration, context: &ObservationContext) {
+        // Call the basic method first
         self.resolved(key, duration);
+        
+        // Provide basic context logging in default implementation
+        if let Some(run_id) = &context.run_id {
+            if let Some(workflow_name) = &context.workflow_name {
+                println!("[{}] [{}] Completed resolution: {} in {:?}", 
+                    run_id, workflow_name, key.display_name(), duration);
+            }
+        }
     }
 
     /// Called when a factory function panics during resolution with workflow context.
     ///
     /// Enhanced version that includes workflow execution context for correlation.
-    /// Default implementation delegates to `factory_panic()`.
+    /// Default implementation calls `factory_panic()` and logs basic context info.
     ///
     /// # Arguments
     ///
@@ -234,7 +252,16 @@ pub trait DiObserver: Send + Sync {
     /// * `message` - The panic message if available
     /// * `context` - Workflow execution context for correlation
     fn factory_panic_with_context(&self, key: &Key, message: &str, context: &ObservationContext) {
+        // Call the basic method first
         self.factory_panic(key, message);
+        
+        // Provide basic context logging in default implementation
+        if let Some(run_id) = &context.run_id {
+            if let Some(workflow_name) = &context.workflow_name {
+                eprintln!("[{}] [{}] FACTORY PANIC in {}: {}", 
+                    run_id, workflow_name, key.display_name(), message);
+            }
+        }
     }
 }
 
@@ -267,21 +294,6 @@ impl Observers {
         !self.observers.is_empty()
     }
 
-    /// Notifies all observers that resolution is starting.
-    #[inline]
-    pub(crate) fn resolving(&self, key: &Key) {
-        for observer in &self.observers {
-            observer.resolving(key);
-        }
-    }
-
-    /// Notifies all observers that resolution completed successfully.
-    #[inline]
-    pub(crate) fn resolved(&self, key: &Key, duration: std::time::Duration) {
-        for observer in &self.observers {
-            observer.resolved(key, duration);
-        }
-    }
 
     /// Notifies all observers that a factory function panicked.
     #[inline]

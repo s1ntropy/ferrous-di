@@ -62,10 +62,13 @@ pub trait AsyncFactory<T: Send + Sync + 'static>: Send + Sync {
     ///
     /// The resolver can be used to access other services that this
     /// service depends on during its async initialization.
-    async fn create(&self, resolver: &dyn ResolverCore) -> Arc<T>;
+    async fn create(&self, resolver: &dyn ResolverCore) -> Result<Arc<T>, Box<dyn std::error::Error + Send + Sync>>;
 }
 
-/// Async service state machine for managing initialization.
+// Async service state machine for managing initialization.
+// This is reserved for future use when implementing lazy async initialization
+// with proper state management and error handling.
+#[allow(dead_code)]
 pub(crate) enum AsyncServiceState<T> {
     /// Service not yet initialized
     Pending,
@@ -91,7 +94,7 @@ impl<T: Send + Sync + 'static> AsyncFactoryWrapper<T> {
         }
     }
 
-    pub async fn create(&self, resolver: &dyn ResolverCore) -> Arc<T> {
+    pub async fn create(&self, resolver: &dyn ResolverCore) -> Result<Arc<T>, Box<dyn std::error::Error + Send + Sync>> {
         self.factory.create(resolver).await
     }
 }
@@ -102,9 +105,9 @@ impl<T, F, Fut> AsyncFactory<T> for F
 where
     T: Send + Sync + 'static,
     F: Fn(&dyn ResolverCore) -> Fut + Send + Sync,
-    Fut: std::future::Future<Output = Arc<T>> + Send,
+    Fut: std::future::Future<Output = Result<Arc<T>, Box<dyn std::error::Error + Send + Sync>>> + Send,
 {
-    async fn create(&self, resolver: &dyn ResolverCore) -> Arc<T> {
+    async fn create(&self, resolver: &dyn ResolverCore) -> Result<Arc<T>, Box<dyn std::error::Error + Send + Sync>> {
         self(resolver).await
     }
 }
@@ -131,14 +134,16 @@ where
 #[macro_export]
 macro_rules! async_factory {
     (|$resolver:ident| async $body:block) => {
-        move |$resolver: &dyn $crate::ResolverCore| async move $body
+        move |$resolver: &dyn $crate::ResolverCore| async move {
+            Ok($body)
+        }
     };
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ServiceCollection, traits::{ResolverCore, Dispose, AsyncDispose}, Key, DiResult};
+    use crate::{traits::ResolverCore, Key, DiResult};
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::time::Duration;
 
@@ -153,15 +158,15 @@ mod tests {
 
     #[async_trait]
     impl AsyncFactory<AsyncService> for AsyncServiceFactory {
-        async fn create(&self, _resolver: &dyn ResolverCore) -> Arc<AsyncService> {
+        async fn create(&self, _resolver: &dyn ResolverCore) -> Result<Arc<AsyncService>, Box<dyn std::error::Error + Send + Sync>> {
             // Simulate async initialization
             tokio::time::sleep(Duration::from_millis(10)).await;
             self.init_count.fetch_add(1, Ordering::Relaxed);
             
-            Arc::new(AsyncService {
+            Ok(Arc::new(AsyncService {
                 init_count: self.init_count.clone(),
                 value: "async initialized".to_string(),
-            })
+            }))
         }
     }
 
@@ -191,7 +196,7 @@ mod tests {
         }
         
         let resolver = MockResolver;
-        let service = wrapper.create(&resolver).await;
+        let service = wrapper.create(&resolver).await.unwrap();
         
         assert_eq!(service.value, "async initialized");
         assert_eq!(init_count.load(Ordering::Relaxed), 1);
@@ -207,7 +212,7 @@ mod tests {
             async move {
                 tokio::time::sleep(Duration::from_millis(5)).await;
                 count.fetch_add(1, Ordering::Relaxed);
-                Arc::new("closure async service".to_string())
+                Ok(Arc::new("closure async service".to_string()))
             }
         };
         
@@ -227,7 +232,7 @@ mod tests {
         }
         
         let resolver = MockResolver;
-        let service = factory.create(&resolver).await;
+        let service = factory.create(&resolver).await.unwrap();
         
         assert_eq!(*service, "closure async service");
         assert_eq!(init_count.load(Ordering::Relaxed), 1);
